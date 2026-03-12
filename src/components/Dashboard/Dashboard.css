@@ -634,3 +634,27 @@ body {
   .item-name             { font-size: 13px; }
   .item-preview          { font-size: 11px; }
 }
+
+
+/*(MOBILE: max-width 768px)*/
+@media (max-width: 768px) {
+
+  body {
+    background: #0f1623;
+    overscroll-behavior: none;
+  }
+
+  .dashboard-wrapper {
+    background: #0f1623;
+    overscroll-behavior: none;
+  }
+
+  .sidebar {
+    overscroll-behavior: none;
+  }
+
+  .sidebar-list {
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+}

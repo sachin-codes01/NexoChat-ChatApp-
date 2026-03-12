@@ -26,7 +26,7 @@ const GroupChat = ({ inlineChatId, onBack, onGroupDeleted }) => {
   const [membersListVisible, setMembersListVisible] = useState(false)
   const [confirmModal, setConfirmModal]       = useState(null)
 
-  // Add Members state
+ 
   const [showAddMembers, setShowAddMembers]   = useState(false)
   const [myContacts, setMyContacts]           = useState([])
   const [selectedToAdd, setSelectedToAdd]     = useState([])
@@ -34,6 +34,7 @@ const GroupChat = ({ inlineChatId, onBack, onGroupDeleted }) => {
 
   const typingTimeout = useRef(null)
   const containerRef  = useRef()
+  const chatPageRef   = useRef()    
   const membersRef    = useRef(null)
 
   const scrollToBottom = () => {
@@ -41,7 +42,7 @@ const GroupChat = ({ inlineChatId, onBack, onGroupDeleted }) => {
       containerRef.current.scrollTop = containerRef.current.scrollHeight
   }
 
-  // Reset state when switching chats
+
   useEffect(() => {
     setGroup(null)
     setMessages([])
@@ -53,6 +54,45 @@ const GroupChat = ({ inlineChatId, onBack, onGroupDeleted }) => {
     setShowAddMembers(false)
     setSelectedToAdd([])
     setAddMembersSearch('')
+  }, [chatId])
+
+  useEffect(() => {
+    if (window.innerWidth > 768) return
+
+    const page = chatPageRef.current
+    if (!page) return
+
+    const vp = window.visualViewport
+    if (!vp) return
+
+    const updateLayout = () => {
+
+      const keyboardHeight = Math.max(
+        0,
+        window.innerHeight - vp.offsetTop - vp.height
+      )
+
+      const inputEl = page.querySelector('.chat-input')
+      const inputH  = inputEl ? inputEl.offsetHeight : 68
+
+      page.style.setProperty('--kb-offset',        `${keyboardHeight}px`)
+      page.style.setProperty('--kb-input-bottom',  `${keyboardHeight + inputH}px`)
+      page.style.setProperty('--kb-typing-bottom', `${keyboardHeight + inputH}px`)
+
+      requestAnimationFrame(scrollToBottom)
+    }
+
+    vp.addEventListener('resize', updateLayout)
+    vp.addEventListener('scroll', updateLayout)
+    updateLayout()
+
+    return () => {
+      vp.removeEventListener('resize', updateLayout)
+      vp.removeEventListener('scroll', updateLayout)
+      page.style.removeProperty('--kb-offset')
+      page.style.removeProperty('--kb-input-bottom')
+      page.style.removeProperty('--kb-typing-bottom')
+    }
   }, [chatId])
 
   // Close members popup when clicking outside
@@ -243,7 +283,8 @@ const GroupChat = ({ inlineChatId, onBack, onGroupDeleted }) => {
   const getInitial = (name) => name ? name.charAt(0).toUpperCase() : '?'
 
   return (
-    <div className="chat-page">
+    // ↓ chatPageRef lets the keyboard-fix effect target this element
+    <div className="chat-page" ref={chatPageRef}>
 
       {/*Header*/}
       <div className="chat-header">

@@ -27,6 +27,7 @@ const Chat = ({ inlineChatId, onBack, onRemoveContact }) => {
 
   const typingTimeout = useRef(null)
   const containerRef  = useRef()
+  const chatPageRef   = useRef()    
   const currentUser   = auth.currentUser
 
   const scrollToBottom = () => {
@@ -34,7 +35,6 @@ const Chat = ({ inlineChatId, onBack, onRemoveContact }) => {
       containerRef.current.scrollTop = containerRef.current.scrollHeight
   }
 
-  // Reset when chat changes
   useEffect(() => {
     setMessages([])
     setChatUser(null)
@@ -43,6 +43,45 @@ const Chat = ({ inlineChatId, onBack, onRemoveContact }) => {
     setMessage('')
     setTyping(false)
     setShowRemoveConfirm(false)
+  }, [chatId])
+
+  useEffect(() => {
+    if (window.innerWidth > 768) return
+
+    const page = chatPageRef.current
+    if (!page) return
+
+    const vp = window.visualViewport
+    if (!vp) return
+
+    const updateLayout = () => {
+
+      const keyboardHeight = Math.max(
+        0,
+        window.innerHeight - vp.offsetTop - vp.height
+      )
+
+      const inputEl  = page.querySelector('.chat-input')
+      const inputH   = inputEl ? inputEl.offsetHeight : 68
+
+      page.style.setProperty('--kb-offset',        `${keyboardHeight}px`)
+      page.style.setProperty('--kb-input-bottom',  `${keyboardHeight + inputH}px`)
+      page.style.setProperty('--kb-typing-bottom', `${keyboardHeight + inputH}px`)
+
+      requestAnimationFrame(scrollToBottom)
+    }
+
+    vp.addEventListener('resize', updateLayout)
+    vp.addEventListener('scroll', updateLayout)
+    updateLayout()
+
+    return () => {
+      vp.removeEventListener('resize', updateLayout)
+      vp.removeEventListener('scroll', updateLayout)
+      page.style.removeProperty('--kb-offset')
+      page.style.removeProperty('--kb-input-bottom')
+      page.style.removeProperty('--kb-typing-bottom')
+    }
   }, [chatId])
 
   // Load messages
@@ -167,7 +206,8 @@ const Chat = ({ inlineChatId, onBack, onRemoveContact }) => {
   const getInitial = (n) => n ? n.charAt(0).toUpperCase() : '?'
 
   return (
-    <div className="chat-page">
+
+    <div className="chat-page" ref={chatPageRef}>
 
       {/*Header*/}
       <div className="chat-header">

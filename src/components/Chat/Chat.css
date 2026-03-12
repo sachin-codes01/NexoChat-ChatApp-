@@ -1,4 +1,3 @@
-/* ─── Google Font ─── */
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap');
 
 *, *::before, *::after {
@@ -7,7 +6,6 @@
   box-sizing: border-box;
 }
 
-/*PAGE LAYOUT*/
 .chat-page {
   display: flex;
   flex-direction: column;
@@ -98,7 +96,7 @@
 }
 .chat-header-info small:hover { color: #5b6af0; }
 
-/* Members popup (group chat) */
+/* Members popup */
 .members-popup {
   position: absolute;
   top: calc(100% + 8px);
@@ -141,8 +139,7 @@
 .remove-contact-btn:hover  { background: rgba(224, 82, 82, 0.22); color: #e05252; }
 .remove-contact-btn:active { transform: scale(0.96); }
 
-/*Group action buttons container (Leave)*/
-/* Sits on the right side of the header */
+/*Group container (Leave)*/
 .chat-header-actions {
   display: flex;
   align-items: center;
@@ -175,7 +172,7 @@
 }
 .group-action-btn--leave:hover { background: rgba(251, 146, 60, 0.24); color: #ea6c00; }
 
-/* "(you)" label inside the members popup */
+/* "(you)" label*/
 .members-popup-you {
   margin-left: 6px;
   font-size: 11px;
@@ -196,7 +193,6 @@
 .chat-container::-webkit-scrollbar { width: 4px; }
 .chat-container::-webkit-scrollbar-thumb { background: #d1d9e8; border-radius: 2px; }
 
-/* Inner wrapper pushes messages to the bottom when there are few */
 .chat-messages-inner {
   display: flex;
   flex-direction: column;
@@ -221,7 +217,7 @@
 .msg-row.mine   { align-self: flex-end;   flex-direction: row-reverse; }
 .msg-row.theirs { align-self: flex-start; }
 
-/* Avatar column */
+/* Avatar*/
 .msg-avatar-col {
   display: flex;
   flex-direction: column;
@@ -298,7 +294,7 @@
 }
 .other-message p { font-size: 14px; color: #1a1a2e; font-weight: 400; }
 
-/* Timestamp and read receipt below each message */
+/* Timestamp and read */
 .bubble-meta {
   display: flex;
   align-items: center;
@@ -312,7 +308,7 @@
 .timestamp    { font-size: 10px; color: #b0b8c8; white-space: nowrap; }
 .read-receipt { font-size: 10px; color: #34c987; font-weight: 600; white-space: nowrap; }
 
-/* Edit and Delete buttons — only visible on hover */
+/* Edit and Delete buttons */
 .msg-actions {
   display: none;
   flex-direction: row;
@@ -343,7 +339,6 @@
   border-color: #eef0fe;
 }
 
-/* Extra gap when sender switches */
 .msg-row + .msg-row.mine,
 .msg-row + .msg-row.theirs   { margin-top: 1px; }
 .msg-row.mine  + .msg-row.theirs,
@@ -601,7 +596,7 @@
   gap: 6px;
 }
 
-/* Add Members expanded panel (replaces the button) */
+/* Add Members  */
 .add-members-panel {
   display: flex;
   flex-direction: column;
@@ -725,3 +720,85 @@
   box-shadow: 0 6px 18px rgba(91, 106, 240, 0.45);
 }
 .add-members-confirm:active { transform: scale(0.97); }
+
+
+/*MOBILE:(max-width 768px)*/
+@media (max-width: 768px) {
+
+  .chat-page {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: auto;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  .chat-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 20;
+
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    will-change: transform;
+  }
+
+  .chat-container {
+    position: absolute;
+    top: 56px;
+    left: 0;
+    right: 0;
+    bottom: var(--kb-input-bottom, 68px);
+    overflow-y: auto;
+    flex: none;
+    min-height: 0;
+    background: #f7f8fc;                         
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .chat-input {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: var(--kb-offset, 0px);
+    z-index: 20;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+  }
+
+  .typing-indicator.typing-bottom {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: var(--kb-typing-bottom, 68px);
+    z-index: 19;
+    background: #f7f8fc;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+  }
+}
+
+@media (max-width: 480px) {
+  .chat-container {
+    top: 52px;
+  }
+}
+
+
+@media (max-width: 768px) {
+
+
+  body:has(.chat-page) {
+    background: #f7f8fc;
+    overscroll-behavior: none;
+  }
+  .chat-page {
+    overscroll-behavior: none;
+  }
+}
