@@ -178,7 +178,7 @@ export default function Home() {
         <div className="container">
           <div className="section__header">
             <span className="section__label">What You Get</span>
-            <h2 className="section__title">Everything You Need</h2>
+            <h2 className="section__title color_change">Everything You Need</h2>
             <p className="section__sub">Powerful features packed into a clean, simple interface.</p>
           </div>
           <div className="features-grid">
