@@ -659,9 +659,6 @@ body {
   }
 }
 
-/* ─────────────────────────────────────────
-   ADD THESE STYLES TO THE BOTTOM OF Dashboard.css
-   ───────────────────────────────────────── */
 
 /* "Who Added Me" bar (wraps button + popup) */
 .added-me-bar {
@@ -884,10 +881,6 @@ body {
   text-align: center;
   font-style: italic;
 }
-
-/* ════════════════════════════════════════════
-   PASTE THESE AT THE BOTTOM OF Dashboard.css
-   ════════════════════════════════════════════ */
 
 /* "Who Added Me" bar wrapper */
 .added-me-bar {

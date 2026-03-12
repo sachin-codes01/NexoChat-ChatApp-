@@ -803,11 +803,8 @@
   }
 }
 
-/* ════════════════════════════════════════════
-   PASTE THESE AT THE BOTTOM OF Chat.css
-   ════════════════════════════════════════════ */
 
-/* System message row — centered between bubbles */
+/* System message*/
 .system-msg-row {
   display: flex;
   justify-content: center;

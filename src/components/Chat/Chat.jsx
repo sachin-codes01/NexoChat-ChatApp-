@@ -128,7 +128,7 @@ const Chat = ({ inlineChatId, onBack, onRemoveContact }) => {
 
   useEffect(() => { scrollToBottom() }, [messages])
 
-  // Delete system messages addressed to ME in this chat (called on first keystroke)
+  // Delete system messages addressed to ME in this chat
   const clearSystemMessages = async () => {
     if (systemMsgsClearedRef.current) return
     systemMsgsClearedRef.current = true
@@ -171,7 +171,6 @@ const Chat = ({ inlineChatId, onBack, onRemoveContact }) => {
 
   const handleTyping = async (e) => {
     const newVal = e.target.value
-    // First keystroke → silently delete all system messages
     if (!message && newVal) {
       clearSystemMessages()
     }
@@ -186,25 +185,19 @@ const Chat = ({ inlineChatId, onBack, onRemoveContact }) => {
   const deleteMessage = async (id) => deleteDoc(doc(db, 'messages', id))
   const startEdit     = (msg) => { setEditingId(msg.id); setMessage(msg.text) }
 
-  // Remove contact — if both sides have removed each other, delete all messages;
-  // otherwise leave a "removed you" system message for the other person
   const handleRemoveContact = async () => {
     if (!chatUser) return
 
-    // Check if the other person has also removed us already
     const theirDoc       = await getDoc(doc(db, 'users', chatUser.uid))
     const theirContacts  = theirDoc.exists() ? (theirDoc.data().contacts || []) : []
     const theyRemovedMe  = !theirContacts.includes(currentUser.uid)
 
     if (theyRemovedMe) {
-      // Both sides removed — delete every message in this chat
       const q    = query(collection(db, 'messages'), where('chatId', '==', chatId))
       const snap = await getDocs(q)
       await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'messages', d.id))))
-      // Clear lastMessage on the chat doc too
       await updateDoc(doc(db, 'chats', chatId), { lastMessage: null })
     } else {
-      // Only we removed them — leave a notice for the other person
       try {
         await addDoc(collection(db, 'messages'), {
           chatId,
