@@ -6,31 +6,3 @@
   from = "/*"
   to = "/index.html"
   status = 200
-```
-
-> If you're using **Create React App** instead of Vite, change `publish = "dist"` to `publish = "build"`
-
----
-
-## Fix 2: Verify Publish Directory in Netlify Dashboard
-
-1. Go to your Netlify site → **Site Settings → Build & Deploy → Build Settings**
-2. Make sure **Publish directory** matches your framework:
-   - **Vite** → `dist`
-   - **Create React App** → `build`
-   - **Next.js** → `.next`
-
----
-
-## Fix 3: Add a `_headers` file
-
-Create a `public/_headers` file:
-```
-/*
-  Content-Type: application/javascript; charset=utf-8
-
-/*.js
-  Content-Type: application/javascript; charset=utf-8
-
-/*.mjs
-  Content-Type: application/javascript; charset=utf-8
