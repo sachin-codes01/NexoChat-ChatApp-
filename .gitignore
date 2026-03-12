@@ -7,24 +7,91 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage
+coverage
+*.lcov
+.nyc_output
+
+# Dependency directories
+node_modules/
+jspm_packages/
+bower_components
+web_modules/
+
+# Build outputs
 dist
 dist-ssr
-*.local
+build/Release
+.next
+.nuxt
+out
+.svelte-kit/
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+# Cache
+.cache
+.parcel-cache
+.temp
+.eslintcache
+.stylelintcache
+.npm
 
-# environment variables
+# Environment variables
 .env
+.env.*
+!.env.example
 .env.local
 .env.development
 .env.production
+
+# TypeScript
+*.tsbuildinfo
+
+# Optional REPL history
+.node_repl_history
+
+# Output of npm pack
+*.tgz
+
+# Yarn
+.yarn-integrity
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+# Vite
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# Firebase
+.firebase/
+
+# Serverless
+.serverless/
+
+# DynamoDB
+.dynamodb/
+
+# Editor directories
+.vscode/*
+!.vscode/extensions.json
+.vscode-test
+.idea
+
+# OS files
+.DS_Store
+
+# Misc
+*.local
+.lock-wscript
+lib-cov
+.tern-port
