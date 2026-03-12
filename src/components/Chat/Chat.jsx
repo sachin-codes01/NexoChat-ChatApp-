@@ -2,7 +2,8 @@ import './Chat.css'
 import React, { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { auth, db } from '../../firebase/firebase'
-import { collection, addDoc, query, where, onSnapshot, serverTimestamp, orderBy, doc, getDoc, deleteDoc, updateDoc, onSnapshot as onDocSnapshot, arrayRemove} from "firebase/firestore"
+import { collection, addDoc, query, where, onSnapshot, serverTimestamp, orderBy,
+  doc, getDoc, deleteDoc, updateDoc, getDocs, onSnapshot as onDocSnapshot, arrayRemove } from "firebase/firestore"
 import CircularProgress from '@mui/material/CircularProgress'
 import Box from '@mui/material/Box'
 import SendIcon from '@mui/icons-material/Send'
@@ -13,7 +14,7 @@ import PersonRemoveIcon from '@mui/icons-material/PersonRemove'
 const Chat = ({ inlineChatId, onBack, onRemoveContact }) => {
   const { chatId: paramChatId } = useParams()
   const chatId    = inlineChatId || paramChatId
-  const isMobile  = !inlineChatId    
+  const isMobile  = !inlineChatId
 
   const navigate = useNavigate()
 
@@ -25,9 +26,12 @@ const Chat = ({ inlineChatId, onBack, onRemoveContact }) => {
   const [typing, setTyping]                 = useState(false)
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false)
 
+  // Track if system messages have already been cleared this session
+  const systemMsgsClearedRef = useRef(false)
+
   const typingTimeout = useRef(null)
   const containerRef  = useRef()
-  const chatPageRef   = useRef()    
+  const chatPageRef   = useRef()
   const currentUser   = auth.currentUser
 
   const scrollToBottom = () => {
@@ -43,38 +47,27 @@ const Chat = ({ inlineChatId, onBack, onRemoveContact }) => {
     setMessage('')
     setTyping(false)
     setShowRemoveConfirm(false)
+    systemMsgsClearedRef.current = false
   }, [chatId])
 
   useEffect(() => {
     if (window.innerWidth > 768) return
-
     const page = chatPageRef.current
     if (!page) return
-
     const vp = window.visualViewport
     if (!vp) return
-
     const updateLayout = () => {
-
-      const keyboardHeight = Math.max(
-        0,
-        window.innerHeight - vp.offsetTop - vp.height
-      )
-
-      const inputEl  = page.querySelector('.chat-input')
-      const inputH   = inputEl ? inputEl.offsetHeight : 68
-
+      const keyboardHeight = Math.max(0, window.innerHeight - vp.offsetTop - vp.height)
+      const inputEl = page.querySelector('.chat-input')
+      const inputH  = inputEl ? inputEl.offsetHeight : 68
       page.style.setProperty('--kb-offset',        `${keyboardHeight}px`)
       page.style.setProperty('--kb-input-bottom',  `${keyboardHeight + inputH}px`)
       page.style.setProperty('--kb-typing-bottom', `${keyboardHeight + inputH}px`)
-
       requestAnimationFrame(scrollToBottom)
     }
-
     vp.addEventListener('resize', updateLayout)
     vp.addEventListener('scroll', updateLayout)
     updateLayout()
-
     return () => {
       vp.removeEventListener('resize', updateLayout)
       vp.removeEventListener('scroll', updateLayout)
@@ -119,11 +112,9 @@ const Chat = ({ inlineChatId, onBack, onRemoveContact }) => {
       const chatRef = doc(db, 'chats', chatId)
       const chatDoc = await getDoc(chatRef)
       if (!chatDoc.exists()) return
-
       const otherUid = chatDoc.data().members.find(u => u !== currentUser.uid)
       const userDoc  = await getDoc(doc(db, 'users', otherUid))
       if (userDoc.exists()) setChatUser(userDoc.data())
-
       const unsubTyping = onDocSnapshot(chatRef, (snap) => {
         const data = snap.data()
         if (data?.typing) setTyping(data.typing[otherUid] || false)
@@ -137,7 +128,21 @@ const Chat = ({ inlineChatId, onBack, onRemoveContact }) => {
 
   useEffect(() => { scrollToBottom() }, [messages])
 
-  //Send/edit message
+  // Delete system messages addressed to ME in this chat (called on first keystroke)
+  const clearSystemMessages = async () => {
+    if (systemMsgsClearedRef.current) return
+    systemMsgsClearedRef.current = true
+    const q    = query(
+      collection(db, 'messages'),
+      where('chatId', '==', chatId),
+      where('sender', '==', 'system'),
+      where('recipientUid', '==', currentUser.uid)
+    )
+    const snap = await getDocs(q)
+    await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'messages', d.id))))
+  }
+
+  // Send / edit message
   const sendMessage = async () => {
     if (!message.trim()) return
     await updateDoc(doc(db, 'chats', chatId), { [`typing.${currentUser.uid}`]: false })
@@ -165,7 +170,12 @@ const Chat = ({ inlineChatId, onBack, onRemoveContact }) => {
   }
 
   const handleTyping = async (e) => {
-    setMessage(e.target.value)
+    const newVal = e.target.value
+    // First keystroke → silently delete all system messages
+    if (!message && newVal) {
+      clearSystemMessages()
+    }
+    setMessage(newVal)
     await updateDoc(doc(db, 'chats', chatId), { [`typing.${currentUser.uid}`]: true })
     if (typingTimeout.current) clearTimeout(typingTimeout.current)
     typingTimeout.current = setTimeout(async () => {
@@ -176,9 +186,45 @@ const Chat = ({ inlineChatId, onBack, onRemoveContact }) => {
   const deleteMessage = async (id) => deleteDoc(doc(db, 'messages', id))
   const startEdit     = (msg) => { setEditingId(msg.id); setMessage(msg.text) }
 
-  //Remove contact
+  // Remove contact — if both sides have removed each other, delete all messages;
+  // otherwise leave a "removed you" system message for the other person
   const handleRemoveContact = async () => {
     if (!chatUser) return
+
+    // Check if the other person has also removed us already
+    const theirDoc       = await getDoc(doc(db, 'users', chatUser.uid))
+    const theirContacts  = theirDoc.exists() ? (theirDoc.data().contacts || []) : []
+    const theyRemovedMe  = !theirContacts.includes(currentUser.uid)
+
+    if (theyRemovedMe) {
+      // Both sides removed — delete every message in this chat
+      const q    = query(collection(db, 'messages'), where('chatId', '==', chatId))
+      const snap = await getDocs(q)
+      await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'messages', d.id))))
+      // Clear lastMessage on the chat doc too
+      await updateDoc(doc(db, 'chats', chatId), { lastMessage: null })
+    } else {
+      // Only we removed them — leave a notice for the other person
+      try {
+        await addDoc(collection(db, 'messages'), {
+          chatId,
+          sender: 'system',
+          text: `⚠️ ${currentUser.displayName || 'This person'} has removed you from their contacts.`,
+          timestamp: serverTimestamp(),
+          readBy: [currentUser.uid]
+        })
+        await updateDoc(doc(db, 'chats', chatId), {
+          lastMessage: {
+            text: `${currentUser.displayName || 'This person'} removed you from their contacts.`,
+            sender: 'system',
+            timestamp: serverTimestamp(),
+            seenBy: [currentUser.uid]
+          }
+        })
+      } catch (err) {
+        console.error('remove message error:', err)
+      }
+    }
 
     await updateDoc(doc(db, 'users', currentUser.uid), {
       contacts: arrayRemove(chatUser.uid)
@@ -206,32 +252,25 @@ const Chat = ({ inlineChatId, onBack, onRemoveContact }) => {
   const getInitial = (n) => n ? n.charAt(0).toUpperCase() : '?'
 
   return (
-
     <div className="chat-page" ref={chatPageRef}>
 
-      {/*Header*/}
+      {/* Header */}
       <div className="chat-header">
         <button className="back-btn" onClick={handleBack}><ArrowBackIcon /></button>
-
         {chatUser && (
           <div className="chat-header-avatar">{getInitial(chatUser.name)}</div>
         )}
         {!loading && <h2 className="chat-header-name">{chatUser?.name}</h2>}
-
-        {/*Remove Contact*/}
         {chatUser && (
-          <button
-            className="remove-contact-btn"
-            onClick={() => setShowRemoveConfirm(true)}
-            title="Remove from Chats"
-          >
+          <button className="remove-contact-btn"
+            onClick={() => setShowRemoveConfirm(true)} title="Remove from Chats">
             <PersonRemoveIcon fontSize="small" />
             <span className="remove-contact-label">Remove</span>
           </button>
         )}
       </div>
 
-      {/*Remove Confirm*/}
+      {/* Remove Confirm */}
       {showRemoveConfirm && (
         <div className="modal-overlay" onClick={() => setShowRemoveConfirm(false)}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
@@ -249,7 +288,7 @@ const Chat = ({ inlineChatId, onBack, onRemoveContact }) => {
         </div>
       )}
 
-      {/*Messages*/}
+      {/* Messages */}
       <div className="chat-container" ref={containerRef}>
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', mt: '20px' }}>
@@ -258,6 +297,20 @@ const Chat = ({ inlineChatId, onBack, onRemoveContact }) => {
         ) : (
           <div className="chat-messages-inner">
             {messages.map((msg, idx) => {
+
+              // System message — only show if addressed to me (or broadcast to all)
+              if (msg.sender === 'system') {
+                const isForMe = !msg.recipientUid || msg.recipientUid === currentUser.uid
+                if (!isForMe) return null
+                return (
+                  <div key={msg.id} className="system-msg-row">
+                    <div className="system-message">
+                      <p>{msg.text}</p>
+                    </div>
+                  </div>
+                )
+              }
+
               const isMe    = msg.sender === currentUser.uid
               const isSeen  = isMe && msg.readBy?.includes(chatUser?.uid)
               const nextMsg = messages[idx + 1]
@@ -296,7 +349,7 @@ const Chat = ({ inlineChatId, onBack, onRemoveContact }) => {
         )}
       </div>
 
-      {/*Typing indicator*/}
+      {/* Typing indicator */}
       {typing && (
         <div className="typing-indicator typing-bottom">
           {chatUser?.name} is typing
@@ -306,7 +359,7 @@ const Chat = ({ inlineChatId, onBack, onRemoveContact }) => {
         </div>
       )}
 
-      {/*Input*/}
+      {/* Input */}
       <div className="chat-input">
         <input
           type="text"

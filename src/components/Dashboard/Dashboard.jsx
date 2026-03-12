@@ -4,7 +4,7 @@ import { auth, db } from '../../firebase/firebase'
 import { signOut, deleteUser, onAuthStateChanged } from "firebase/auth"
 import { useNavigate } from 'react-router-dom'
 import { collection, query, where, getDocs, addDoc, deleteDoc,
-  doc, onSnapshot, updateDoc, getDoc, arrayUnion, arrayRemove} from "firebase/firestore"
+  doc, onSnapshot, updateDoc, getDoc, arrayUnion, arrayRemove, serverTimestamp} from "firebase/firestore"
 import CircularProgress from '@mui/material/CircularProgress'
 import GroupChatCreate from "../Chat/GroupChatCreate"
 import Chat from "../Chat/Chat"
@@ -26,10 +26,15 @@ const Dashboard = () => {
   const [allContactsSearch, setAllContactsSearch] = useState("")
   const [activeTab, setActiveTab] = useState('chats')
 
-  // selectedChat: { type, id, partnerUid? }
   const [selectedChat, setSelectedChat] = useState(null)
   const [showDropdown, setShowDropdown] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+
+  // "Who Added Me" state
+  const [showAddedMePopup, setShowAddedMePopup] = useState(false)
+  const [usersWhoAddedMe, setUsersWhoAddedMe] = useState([])
+  const [seenAddedMeUids, setSeenAddedMeUids] = useState([])
+  const addedMePopupRef = useRef(null)
 
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
   useEffect(() => {
@@ -38,17 +43,27 @@ const Dashboard = () => {
     return () => window.removeEventListener('resize', h)
   }, [])
 
-  const unsubUsersRef = useRef(null)
-  const unsubGroupsRef = useRef(null)
-  const unsubChatsRef = useRef(null)
-  const unsubContactsRef = useRef(null)
-  const dropdownRef = useRef(null)
-  const navigate = useNavigate()
+  const unsubUsersRef     = useRef(null)
+  const unsubGroupsRef    = useRef(null)
+  const unsubChatsRef     = useRef(null)
+  const unsubContactsRef  = useRef(null)
+  const unsubAddedMeRef   = useRef(null)
+  const dropdownRef       = useRef(null)
+  const navigate          = useNavigate()
 
   useEffect(() => {
     const h = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target))
         setShowDropdown(false)
+    }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [])
+
+  useEffect(() => {
+    const h = (e) => {
+      if (addedMePopupRef.current && !addedMePopupRef.current.contains(e.target))
+        setShowAddedMePopup(false)
     }
     document.addEventListener('mousedown', h)
     return () => document.removeEventListener('mousedown', h)
@@ -68,10 +83,12 @@ const Dashboard = () => {
       unsubGroupsRef.current?.()
       unsubChatsRef.current?.()
       unsubContactsRef.current?.()
-      unsubUsersRef.current = listenUsers(user.uid)
-      unsubGroupsRef.current = listenGroups(user.uid)
-      unsubChatsRef.current = listenChats(user.uid)
+      unsubAddedMeRef.current?.()
+      unsubUsersRef.current    = listenUsers(user.uid)
+      unsubGroupsRef.current   = listenGroups(user.uid)
+      unsubChatsRef.current    = listenChats(user.uid)
       unsubContactsRef.current = listenMyContacts(user.uid)
+      unsubAddedMeRef.current  = listenUsersWhoAddedMe(user.uid)
     })
     return () => {
       unsubAuth()
@@ -79,6 +96,7 @@ const Dashboard = () => {
       unsubGroupsRef.current?.()
       unsubChatsRef.current?.()
       unsubContactsRef.current?.()
+      unsubAddedMeRef.current?.()
     }
   }, [])
 
@@ -115,22 +133,114 @@ const Dashboard = () => {
     })
   }
 
-  //Contacts management
-
-  const addToMyContacts = async (uid) => {
-    if (!currentUser) return
-    await updateDoc(doc(db, 'users', currentUser.uid), { contacts: arrayUnion(uid) })
+  // Real-time listener: who has me in their contacts
+  const listenUsersWhoAddedMe = (uid) => {
+    const q = query(collection(db, 'users'), where('contacts', 'array-contains', uid))
+    return onSnapshot(q, (snap) => {
+      const result = snap.docs.map(d => d.data()).filter(u => u.uid !== uid)
+      setUsersWhoAddedMe(result)
+    }, (err) => console.error('listenUsersWhoAddedMe:', err.code))
   }
 
-  // Remove a contact → they go back to Contacts tab
+  // Open popup and immediately mark all visible entries as "seen"
+  const handleOpenAddedMe = () => {
+    setShowAddedMePopup(true)
+    setSeenAddedMeUids(prev => {
+      const updated = [...prev]
+      usersWhoAddedMe.forEach(u => { if (!updated.includes(u.uid)) updated.push(u.uid) })
+      return updated
+    })
+  }
+
+  // Badge: people who added me, not yet seen, not already in my contacts
+  const pendingAddedMeCount = usersWhoAddedMe.filter(
+    u => !seenAddedMeUids.includes(u.uid) && !myContactUids.includes(u.uid)
+  ).length
+
+  // ── Find or create 1-on-1 chat ──
+  const findOrCreateChat = async (partnerUid) => {
+    const q    = query(collection(db, 'chats'), where('members', 'array-contains', currentUser.uid))
+    const snap = await getDocs(q)
+    let chatId = null
+    snap.forEach(d => { if (d.data().members.includes(partnerUid)) chatId = d.id })
+    if (!chatId) {
+      const chat = await addDoc(collection(db, 'chats'), {
+        members: [currentUser.uid, partnerUid],
+        type: 'private',
+        lastMessage: null
+      })
+      chatId = chat.id
+    }
+    return chatId
+  }
+
+  // ── System message helper: sends TWO messages so each user sees the other's name ──
+  const sendMutualConnectMessages = async (chatId, partnerName, partnerUid) => {
+    const myName = currentUser.displayName || name || 'Someone'
+    // Message 1: the partner reads "[partnerName] is available to chat!" (addressed to them)
+    await addDoc(collection(db, 'messages'), {
+      chatId,
+      sender: 'system',
+      recipientUid: partnerUid,
+      text: `👋 ${partnerName || 'Your contact'} is available to chat!`,
+      timestamp: serverTimestamp(),
+      readBy: []
+    })
+    // Message 2: I read "[myName] is available to chat!" (addressed to me)
+    await addDoc(collection(db, 'messages'), {
+      chatId,
+      sender: 'system',
+      recipientUid: currentUser.uid,
+      text: `👋 ${myName} is available to chat!`,
+      timestamp: serverTimestamp(),
+      readBy: []
+    })
+    await updateDoc(doc(db, 'chats', chatId), {
+      lastMessage: {
+        text: `👋 ${myName} is available to chat!`,
+        sender: 'system',
+        timestamp: serverTimestamp(),
+        seenBy: [currentUser.uid]
+      }
+    })
+  }
+
+  // ── Add contact (plain — from Contacts tab "+" button) ──
+  const addToMyContacts = async (uid, partnerName) => {
+    if (!currentUser) return
+    const theirDoc       = await getDoc(doc(db, 'users', uid))
+    const alreadyAddedMe = theirDoc.exists() &&
+      (theirDoc.data().contacts || []).includes(currentUser.uid)
+
+    await updateDoc(doc(db, 'users', currentUser.uid), { contacts: arrayUnion(uid) })
+
+    if (alreadyAddedMe) {
+      const cid = await findOrCreateChat(uid)
+      await sendMutualConnectMessages(cid, partnerName, uid)
+    }
+  }
+
+  // ── Add back from "Who Added Me" popup ──
+  const addBackFromPopup = async (user) => {
+    const theirDoc       = await getDoc(doc(db, 'users', user.uid))
+    const alreadyAddedMe = theirDoc.exists() &&
+      (theirDoc.data().contacts || []).includes(currentUser.uid)
+
+    await updateDoc(doc(db, 'users', currentUser.uid), { contacts: arrayUnion(user.uid) })
+
+    if (alreadyAddedMe) {
+      const cid = await findOrCreateChat(user.uid)
+      await sendMutualConnectMessages(cid, user.name, user.uid)
+    }
+  }
+
+  // ── Remove contact (called by Chat via onRemoveContact prop) ──
+  // Message is sent inside Chat.js's handleRemoveContact — no duplicate here
   const removeFromMyContacts = async (uid) => {
     if (!currentUser) return
     await updateDoc(doc(db, 'users', currentUser.uid), { contacts: arrayRemove(uid) })
-    // Close the chat panel if the removed user's chat is open
     setSelectedChat(prev => (prev?.partnerUid === uid ? null : prev))
   }
-
-  //Auth
 
   const logout = async () => {
     if (auth.currentUser)
@@ -155,8 +265,6 @@ const Dashboard = () => {
       setLoading(false)
     }
   }
-
-  //Chat
 
   const openChat = async (user) => {
     if (!currentUser) return
@@ -209,7 +317,6 @@ const Dashboard = () => {
     )
   }
 
-  //get latest message timestampfor a user's chat
   const getChatTimestamp = (uid) => {
     const chat = chats.find(c =>
       c.members.includes(uid) && c.members.includes(currentUser?.uid)
@@ -220,13 +327,11 @@ const Dashboard = () => {
   const getInitial   = (n) => n ? n.charAt(0).toUpperCase() : '?'
   const activeChatId = selectedChat?.id ?? null
 
-  // My Contacts — sorted by most recent message (newest on top)
   const myContactUsers = users
     .filter(u => myContactUids.includes(u.uid))
     .filter(u => u.name?.toLowerCase().includes(myContactsSearch.toLowerCase()))
     .sort((a, b) => getChatTimestamp(b.uid) - getChatTimestamp(a.uid))
 
-  // Contacts — users not yet added
   const discoverUsers = users
     .filter(u => !myContactUids.includes(u.uid))
     .filter(u => u.name?.toLowerCase().includes(allContactsSearch.toLowerCase()))
@@ -239,7 +344,6 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/*SIDEBAR*/}
       <div className="sidebar">
 
         <div className="sidebar-profile">
@@ -268,19 +372,13 @@ const Dashboard = () => {
           <button className="btn-action btn-group"  onClick={() => setShowGroupCreate(true)}>+ Group</button>
         </div>
 
-        {/* Tab switcher */}
         <div className="sidebar-tabs">
           <button className={`sidebar-tab${activeTab === 'chats' ? ' sidebar-tab--active' : ''}`}
-            onClick={() => setActiveTab('chats')}>
-            Chats
-          </button>
+            onClick={() => setActiveTab('chats')}>Chats</button>
           <button className={`sidebar-tab${activeTab === 'contacts' ? ' sidebar-tab--active' : ''}`}
-            onClick={() => setActiveTab('contacts')}>
-            Contacts
-          </button>
+            onClick={() => setActiveTab('contacts')}>Contacts</button>
         </div>
 
-        {/*CHATS TAB*/}
         {activeTab === 'chats' && (
           <>
             <div className="sidebar-search">
@@ -308,9 +406,7 @@ const Dashboard = () => {
                 )
                 const isActive = userChat?.id === activeChatId
                 return (
-                  <div
-                    key={user.uid}
-                    className={`sidebar-item${isActive ? ' active' : ''}`}
+                  <div key={user.uid} className={`sidebar-item${isActive ? ' active' : ''}`}
                     onClick={() => openChat(user)}>
                     <div className="item-avatar">{getInitial(user.name)}</div>
                     <div className="item-body">
@@ -328,8 +424,7 @@ const Dashboard = () => {
                 <>
                   <div className="sidebar-section-title groups-title">Groups</div>
                   {groups.map(group => (
-                    <div
-                      key={group.id}
+                    <div key={group.id}
                       className={`sidebar-item${group.id === activeChatId ? ' active' : ''}`}
                       onClick={() => openGroupChat(group.id)}>
                       <div className="item-avatar group-avatar">{getInitial(group.name)}</div>
@@ -350,7 +445,6 @@ const Dashboard = () => {
           </>
         )}
 
-        {/*CONTACTS TAB*/}
         {activeTab === 'contacts' && (
           <>
             <div className="sidebar-search">
@@ -360,6 +454,57 @@ const Dashboard = () => {
                   value={allContactsSearch}
                   onChange={e => setAllContactsSearch(e.target.value)}/>
               </div>
+            </div>
+
+            {/* Who Added Me */}
+            <div className="added-me-bar" ref={addedMePopupRef}>
+              <button className="added-me-btn" onClick={handleOpenAddedMe}>
+                <span className="added-me-btn__icon">👥</span>
+                <span>Who added me?</span>
+                {pendingAddedMeCount > 0 && (
+                  <span className="added-me-badge">{pendingAddedMeCount}</span>
+                )}
+              </button>
+
+              {showAddedMePopup && (
+                <div className="added-me-popup">
+                  <div className="added-me-popup__header">
+                    <span className="added-me-popup__title">People who added you</span>
+                    <button className="added-me-popup__close"
+                      onClick={() => setShowAddedMePopup(false)}>✕</button>
+                  </div>
+
+                  {usersWhoAddedMe.length === 0 ? (
+                    <div className="added-me-popup__empty">
+                      <span className="added-me-popup__empty-icon">🕊️</span>
+                      <p>Nobody has added you yet.</p>
+                    </div>
+                  ) : (
+                    <ul className="added-me-popup__list">
+                      {usersWhoAddedMe.map(user => {
+                        const alreadyInContacts = myContactUids.includes(user.uid)
+                        return (
+                          <li key={user.uid} className="added-me-popup__item">
+                            <div className="added-me-popup__avatar">{getInitial(user.name)}</div>
+                            <div className="added-me-popup__info">
+                              <span className="added-me-popup__name">{user.name}</span>
+                              <span className="added-me-popup__email">{user.email}</span>
+                            </div>
+                            {alreadyInContacts ? (
+                              <span className="added-me-popup__mutual">✓ Mutual</span>
+                            ) : (
+                              <button className="added-me-popup__add-btn"
+                                onClick={() => addBackFromPopup(user)}>
+                                + Add back
+                              </button>
+                            )}
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="sidebar-list">
@@ -383,7 +528,7 @@ const Dashboard = () => {
                     <div className="item-preview">{user.email}</div>
                   </div>
                   <button className="add-contact-btn"
-                    onClick={() => addToMyContacts(user.uid)}
+                    onClick={() => addToMyContacts(user.uid, user.name)}
                     title={`Add ${user.name} to My Contacts`}>+</button>
                 </div>
               ))}
@@ -392,7 +537,6 @@ const Dashboard = () => {
         )}
       </div>
 
-      {/*RIGHT PANE*/}
       <div className="dashboard-main">
         {!selectedChat ? (
           <div className="dashboard-empty">
