@@ -422,7 +422,7 @@ body {
   background: #eff6ff;
   border: 1px solid #bfdbfe;
   border-radius: 8px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   color: #1d4ed8;
   line-height: 1.5;
@@ -631,6 +631,8 @@ body {
     max-width: 100%;
   }
   .form-title { font-size: 26px; }
+
+  .field-info { font-size: 12px; }
 }
 
 @media (max-width: 480px) {
@@ -654,4 +656,9 @@ body {
   .brand-logo {
     margin-bottom: 28px;
   }
+  .field-info { font-size: 11px; }
+}
+
+@media (max-width: 394px) {
+  .field-info { font-size: 10px; }
 }
