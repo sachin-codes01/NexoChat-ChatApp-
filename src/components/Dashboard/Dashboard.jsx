@@ -30,7 +30,6 @@ const Dashboard = () => {
   const [showDropdown, setShowDropdown] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
 
-  // "Who Added Me" state
   const [showAddedMePopup, setShowAddedMePopup] = useState(false)
   const [usersWhoAddedMe, setUsersWhoAddedMe] = useState([])
   const [seenAddedMeUids, setSeenAddedMeUids] = useState([])
@@ -43,13 +42,13 @@ const Dashboard = () => {
     return () => window.removeEventListener('resize', h)
   }, [])
 
-  const unsubUsersRef     = useRef(null)
-  const unsubGroupsRef    = useRef(null)
-  const unsubChatsRef     = useRef(null)
-  const unsubContactsRef  = useRef(null)
-  const unsubAddedMeRef   = useRef(null)
-  const dropdownRef       = useRef(null)
-  const navigate          = useNavigate()
+  const unsubUsersRef    = useRef(null)
+  const unsubGroupsRef   = useRef(null)
+  const unsubChatsRef    = useRef(null)
+  const unsubContactsRef = useRef(null)
+  const unsubAddedMeRef  = useRef(null)
+  const dropdownRef      = useRef(null)
+  const navigate         = useNavigate()
 
   useEffect(() => {
     const h = (e) => {
@@ -69,9 +68,23 @@ const Dashboard = () => {
     return () => document.removeEventListener('mousedown', h)
   }, [])
 
+  // ── Auth guard: block unverified users ──────────────────────
   useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, (user) => {
-      if (!user) { navigate('/Login'); return }
+    const unsubAuth = onAuthStateChanged(auth, async (user) => {
+      // Not logged in → go to Login
+      if (!user) {
+        navigate('/Login')
+        return
+      }
+
+      // Logged in but email NOT verified → sign out and redirect
+      if (!user.emailVerified) {
+        await signOut(auth).catch(() => {})
+        navigate('/Login')
+        return
+      }
+
+      // Fully authenticated + verified → set up listeners
       setCurrentUser(user)
       setName(user.displayName || '')
       setEmail(user.email || '')
@@ -79,6 +92,7 @@ const Dashboard = () => {
       window.addEventListener('beforeunload', () =>
         updateDoc(doc(db, 'users', user.uid), { isOnline: false }).catch(() => {})
       )
+
       unsubUsersRef.current?.()
       unsubGroupsRef.current?.()
       unsubChatsRef.current?.()
@@ -133,7 +147,6 @@ const Dashboard = () => {
     })
   }
 
-  // Real-time listener: who has me in their contacts
   const listenUsersWhoAddedMe = (uid) => {
     const q = query(collection(db, 'users'), where('contacts', 'array-contains', uid))
     return onSnapshot(q, (snap) => {
@@ -142,7 +155,6 @@ const Dashboard = () => {
     }, (err) => console.error('listenUsersWhoAddedMe:', err.code))
   }
 
-  // Open popup and immediately mark all visible entries as "seen"
   const handleOpenAddedMe = () => {
     setShowAddedMePopup(true)
     setSeenAddedMeUids(prev => {
@@ -152,12 +164,10 @@ const Dashboard = () => {
     })
   }
 
-  // Badge: people who added me, not yet seen, not already in my contacts
   const pendingAddedMeCount = usersWhoAddedMe.filter(
     u => !seenAddedMeUids.includes(u.uid) && !myContactUids.includes(u.uid)
   ).length
 
-  // ── Find or create 1-on-1 chat ──
   const findOrCreateChat = async (partnerUid) => {
     const q    = query(collection(db, 'chats'), where('members', 'array-contains', currentUser.uid))
     const snap = await getDocs(q)
@@ -174,68 +184,49 @@ const Dashboard = () => {
     return chatId
   }
 
-  // ── System message helper: sends TWO messages so each user sees the other's name ──
   const sendMutualConnectMessages = async (chatId, partnerName, partnerUid) => {
     const myName = currentUser.displayName || name || 'Someone'
-    // Message 1: the partner reads "[partnerName] is available to chat!" (addressed to them)
     await addDoc(collection(db, 'messages'), {
-      chatId,
-      sender: 'system',
-      recipientUid: partnerUid,
+      chatId, sender: 'system', recipientUid: partnerUid,
       text: `👋 ${partnerName || 'Your contact'} is available to chat!`,
-      timestamp: serverTimestamp(),
-      readBy: []
+      timestamp: serverTimestamp(), readBy: []
     })
-    // Message 2: I read "[myName] is available to chat!" (addressed to me)
     await addDoc(collection(db, 'messages'), {
-      chatId,
-      sender: 'system',
-      recipientUid: currentUser.uid,
+      chatId, sender: 'system', recipientUid: currentUser.uid,
       text: `👋 ${myName} is available to chat!`,
-      timestamp: serverTimestamp(),
-      readBy: []
+      timestamp: serverTimestamp(), readBy: []
     })
     await updateDoc(doc(db, 'chats', chatId), {
       lastMessage: {
         text: `👋 ${myName} is available to chat!`,
-        sender: 'system',
-        timestamp: serverTimestamp(),
-        seenBy: [currentUser.uid]
+        sender: 'system', timestamp: serverTimestamp(), seenBy: [currentUser.uid]
       }
     })
   }
 
-  // ── Add contact (plain — from Contacts tab "+" button) ──
   const addToMyContacts = async (uid, partnerName) => {
     if (!currentUser) return
     const theirDoc       = await getDoc(doc(db, 'users', uid))
     const alreadyAddedMe = theirDoc.exists() &&
       (theirDoc.data().contacts || []).includes(currentUser.uid)
-
     await updateDoc(doc(db, 'users', currentUser.uid), { contacts: arrayUnion(uid) })
-
     if (alreadyAddedMe) {
       const cid = await findOrCreateChat(uid)
       await sendMutualConnectMessages(cid, partnerName, uid)
     }
   }
 
-  // ── Add back from "Who Added Me" popup ──
   const addBackFromPopup = async (user) => {
     const theirDoc       = await getDoc(doc(db, 'users', user.uid))
     const alreadyAddedMe = theirDoc.exists() &&
       (theirDoc.data().contacts || []).includes(currentUser.uid)
-
     await updateDoc(doc(db, 'users', currentUser.uid), { contacts: arrayUnion(user.uid) })
-
     if (alreadyAddedMe) {
       const cid = await findOrCreateChat(user.uid)
       await sendMutualConnectMessages(cid, user.name, user.uid)
     }
   }
 
-  // ── Remove contact (called by Chat via onRemoveContact prop) ──
-  // Message is sent inside Chat.js's handleRemoveContact — no duplicate here
   const removeFromMyContacts = async (uid) => {
     if (!currentUser) return
     await updateDoc(doc(db, 'users', currentUser.uid), { contacts: arrayRemove(uid) })
@@ -272,7 +263,6 @@ const Dashboard = () => {
     const snap = await getDocs(q)
     let chatId = null
     snap.forEach(d => { if (d.data().members.includes(user.uid)) chatId = d.id })
-
     if (chatId) {
       const chatRef  = doc(db, 'chats', chatId)
       const chatSnap = await getDoc(chatRef)
@@ -283,13 +273,10 @@ const Dashboard = () => {
       }
     } else {
       const chat = await addDoc(collection(db, 'chats'), {
-        members: [currentUser.uid, user.uid],
-        type: 'private',
-        lastMessage: null
+        members: [currentUser.uid, user.uid], type: 'private', lastMessage: null
       })
       chatId = chat.id
     }
-
     if (isMobile) navigate(`/Chat/${chatId}`)
     else setSelectedChat({ type: 'private', id: chatId, partnerUid: user.uid })
   }
@@ -456,7 +443,6 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {/* Who Added Me */}
             <div className="added-me-bar" ref={addedMePopupRef}>
               <button className="added-me-btn" onClick={handleOpenAddedMe}>
                 <span className="added-me-btn__icon">👥</span>
