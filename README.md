@@ -21,11 +21,21 @@
 
 ---
 
-## Screenshots 
+## Screenshots
 
-**Desktop View** ![Desktop View](public/PC.png) 
+<div style="display: flex; flex-wrap: nowrap; align-items: flex-start; gap: 20px;">
 
-**Mobile View** ![Mobile View](public/Mobile.png)
+  <div style="text-align: center; flex: 1;">
+    <b>Desktop View</b><br>
+    <img src="public/PC.png" style="height: 300px; width: auto;">
+  </div>
+
+  <div style="text-align: center; flex: 0 0 auto;">
+    <b>Mobile View</b><br>
+    <img src="public/Mobile.png" style="height: 300px; width: auto;">
+  </div>
+
+</div>
 
 ---
 
