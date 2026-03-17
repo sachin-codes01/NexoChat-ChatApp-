@@ -23,7 +23,11 @@
 
 ## Screenshots
 
+**Desktop View** 
+
 ![Desktop View](public/PC.png)
+
+**Mobile View** 
 
 ![Mobile View](public/Mobile.png)
 
