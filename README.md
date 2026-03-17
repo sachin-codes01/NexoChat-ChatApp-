@@ -23,11 +23,14 @@
 
 ## Screenshots
 
-**Desktop View**
-![Desktop View](public/PC.png)
-
-**Mobile View**
-![Mobile View](public/Mobile.png)
+<table>
+  <tr>
+    <td><b>Desktop View</b><br>
+        <img src="public/PC.png" width="400"></td>
+    <td><b>Mobile View</b><br>
+        <img src="public/Mobile.png" width="200"></td>
+  </tr>
+</table>
 
 ---
 
