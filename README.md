@@ -23,18 +23,19 @@
 
 ## Screenshots
 
-<table>
-  <tr>
-    <td align="center">
-      <b>Desktop View</b><br>
-      <img src="public/PC.png" width="400" style="display:block; margin:auto;">
-    </td>
-    <td align="center">
-      <b>Mobile View</b><br>
-      <img src="public/Mobile.png" width="200" style="display:block; margin:auto;">
-    </td>
-  </tr>
-</table>
+<div style="display: flex; align-items: center; gap: 20px;">
+
+  <div style="text-align: center;">
+    <b>Desktop View</b><br>
+    <img src="public/PC.png" height="400">
+  </div>
+
+  <div style="text-align: center;">
+    <b>Mobile View</b><br>
+    <img src="public/Mobile.png" height="400">
+  </div>
+
+</div>
 
 ---
 
