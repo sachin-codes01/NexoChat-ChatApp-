@@ -23,19 +23,12 @@
 
 ## Screenshots
 
-<div style="display: flex; flex-wrap: nowrap; gap: 5px;">
+**Desktop View** 
+![Desktop View](public/PC.png)
 
-  <div>
-    <b>Desktop View</b><br>
-    <img src="public/PC.png" style="height: 300px; width: auto;">
-  </div>
+**Mobile View** 
 
-  <div>
-    <b>Mobile View</b><br>
-    <img src="public/Mobile.png" style="height: 300px; width: auto;">
-  </div>
-
-</div>
+![Mobile View](public/Mobile.png)
 
 ---
 
