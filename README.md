@@ -23,18 +23,18 @@
 
 ## Screenshots
 
-<div style="display: flex; align-items: flex-start; gap: 20px;">
+<div style="display: flex; flex-wrap: nowrap; align-items: flex-start; gap: 20px;">
 
   <!-- Desktop Image -->
-  <div style="text-align: center;">
+  <div style="text-align: center; flex: 1;">
     <b>Desktop View</b><br>
-    <img src="public/PC.png" height="300">
+    <img src="public/PC.png" style="height: 300px; width: auto;">
   </div>
 
   <!-- Mobile Image -->
-  <div style="text-align: center;">
+  <div style="text-align: center; flex: 0 0 auto;">
     <b>Mobile View</b><br>
-    <img src="public/Mobile.png" height="300">
+    <img src="public/Mobile.png" style="height: 300px; width: auto;">
   </div>
 
 </div>
