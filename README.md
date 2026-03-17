@@ -25,10 +25,14 @@
 
 <table>
   <tr>
-    <td><b>Desktop View</b><br>
-        <img src="public/PC.png" width="400"></td>
-    <td><b>Mobile View</b><br>
-        <img src="public/Mobile.png" width="200"></td>
+    <td align="center">
+      <b>Desktop View</b><br>
+      <img src="public/PC.png" width="400" style="display:block; margin:auto;">
+    </td>
+    <td align="center">
+      <b>Mobile View</b><br>
+      <img src="public/Mobile.png" width="200" style="display:block; margin:auto;">
+    </td>
   </tr>
 </table>
 
