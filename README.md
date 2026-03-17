@@ -23,7 +23,7 @@
 
 ## Screenshots
 
-<div style="display: flex; flex-wrap: nowrap; align-items: flex-start; gap: 5px;">
+<div style="display: flex; flex-wrap: nowrap; gap: 5px;">
 
   <div>
     <b>Desktop View</b><br>
